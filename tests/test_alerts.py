@@ -118,6 +118,10 @@ class RenderTests(unittest.TestCase):
         message = 'quote " $(touch /tmp/should-not-exist)\nnewline'
 
         def write_image(command, **kwargs):
+            script = Path(command[2])
+            self.assertTrue(script.is_file())
+            self.assertEqual(list(script.parent.glob("*.star")), [script])
+            self.assertNotEqual(script.parent, alerts.ASSETS)
             Path(command[-1]).write_bytes(b"image")
 
         run.side_effect = write_image

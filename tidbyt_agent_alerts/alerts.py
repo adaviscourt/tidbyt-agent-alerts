@@ -45,8 +45,12 @@ def render(values, message, source, event):
     theme = values["TIDBYT_THEME"]
     script = ASSETS / ("claude.star" if theme == "claude" else "alert.star")
     with tempfile.TemporaryDirectory(prefix="tidbyt-agent-alerts-") as directory:
+        # Newer Pixlet scans sibling .star files even in single-file mode.
+        # Isolate the selected, self-contained theme from other app entry points.
+        isolated = Path(directory) / "alert.star"
+        shutil.copyfile(script, isolated)
         output = Path(directory) / "alert.webp"
-        command = [executable, "render", str(script), f"message={message}",
+        command = [executable, "render", str(isolated), f"message={message}",
                    f"source={source}", f"event={event}",
                    f"gif={values['TIDBYT_ANIMATION']}", "--output", str(output)]
         try:
