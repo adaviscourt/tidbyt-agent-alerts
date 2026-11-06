@@ -95,10 +95,15 @@ class InstallTests(unittest.TestCase):
         archive = package(self.home / "dist")
         checksum = (archive.parent / "SHA256SUMS").read_text().split()[0]
         self.assertEqual(hashlib.sha256(archive.read_bytes()).hexdigest(), checksum)
+        bootstrap = archive.parent / "bootstrap.sh"
+        self.assertEqual(bootstrap.read_bytes(), (ROOT / "bootstrap.sh").read_bytes())
+        checksums = (archive.parent / "SHA256SUMS").read_text().splitlines()
+        self.assertEqual(checksums[1], hashlib.sha256(bootstrap.read_bytes()).hexdigest() + "  bootstrap.sh")
         with tarfile.open(archive) as handle:
             names = handle.getnames()
             self.assertFalse(any("__pycache__" in name or "/.git/" in name for name in names))
             self.assertFalse(any(name.endswith("/config.env") for name in names))
+            self.assertTrue(any(name.endswith("/bootstrap.sh") for name in names))
             # This is the archive just built from the explicit, local allowlist.
             handle.extractall(self.home / "extracted")
         source = self.home / f"extracted/tidbyt-agent-alerts-{__version__}"

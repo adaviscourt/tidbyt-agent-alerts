@@ -29,7 +29,48 @@ supported in this version; WSL is not yet verified.
 
 ## Install
 
-Until the first tagged release, install from source:
+### One command
+
+After the first tagged release is published:
+
+```sh
+curl -fsSL https://github.com/adaviscourt/tidbyt-agent-alerts/releases/latest/download/bootstrap.sh | bash
+```
+
+The bootstrap checks prerequisites, downloads a release over HTTPS, verifies
+its SHA-256 checksum, validates archive contents, then starts the installer.
+Interactive setup reads from your terminal, not the download pipe. Missing
+dependencies produce installation instructions; nothing is installed silently.
+No terminal is required when `--no-setup` is used.
+
+**Security:** Piping a download to Bash immediately executes remote code.
+Checksums detect mismatched downloads but do not establish publisher trust.
+To inspect before running, download the script separately:
+
+```sh
+curl -fsSL -o bootstrap.sh https://github.com/adaviscourt/tidbyt-agent-alerts/releases/latest/download/bootstrap.sh
+less bootstrap.sh
+bash bootstrap.sh
+```
+
+Pin a release, skip setup for automation, or select an install prefix:
+
+```sh
+# Pin both the bootstrap script and application release:
+curl -fsSL https://github.com/adaviscourt/tidbyt-agent-alerts/releases/download/v0.1.0/bootstrap.sh | bash -s -- --version 0.1.0
+
+# Download the bootstrap first for headless installation:
+bash bootstrap.sh --no-setup --prefix "$HOME/tools"
+```
+
+`--version` also accepts a leading `v`. Without it, the bootstrap resolves
+the latest release from its checksum manifest, then pins the archive download
+to that version. Re-running the command upgrades files without deleting your
+configuration. Temporary downloads are removed on exit. No clone is needed.
+
+### From source
+
+Until the first tagged release, or for development, install from source:
 
 ```sh
 git clone https://github.com/adaviscourt/tidbyt-agent-alerts.git
@@ -37,7 +78,10 @@ cd tidbyt-agent-alerts
 ./install.sh
 ```
 
-Once a release is published, download `tidbyt-agent-alerts-VERSION.tar.gz` and
+### Manual release download
+
+Once a release is published, download `tidbyt-agent-alerts-VERSION.tar.gz`,
+`bootstrap.sh`, and
 `SHA256SUMS` from [Releases](https://github.com/adaviscourt/tidbyt-agent-alerts/releases).
 Verify before extracting or running it:
 
@@ -220,7 +264,7 @@ fields. Future adapters should produce `source`, `event`, `project`, and
 `message`, and reuse the same engine. No agent SDK or model calls needed.
 
 GitHub Actions tests macOS/Linux with Python 3.10 and 3.13, checks rendering
-on macOS, and publishes versioned archives plus checksums for `v*` tags.
+on macOS, and publishes versioned archives, the bootstrap, and checksums for `v*` tags.
 Before tagging, update `__version__`, add release notes to
 [CHANGELOG.md](CHANGELOG.md), and merge the tested change.
 
