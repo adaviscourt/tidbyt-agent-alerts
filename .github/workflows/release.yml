@@ -1,0 +1,24 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Verify tag matches application version
+        run: python -c 'import os; from tidbyt_agent_alerts import __version__; assert os.environ["GITHUB_REF_NAME"] == "v" + __version__'
+      - run: python -m unittest discover -s tests -v
+      - run: python scripts/package.py
+      - name: Publish archive and checksum
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/*.tar.gz dist/SHA256SUMS --verify-tag --generate-notes

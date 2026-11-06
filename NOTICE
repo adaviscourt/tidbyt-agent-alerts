@@ -1,0 +1,10 @@
+Tidbyt Agent Alerts
+Copyright 2026 Austin Daviscourt
+
+tidbyt_agent_alerts/assets/claude.star is adapted from
+apps/claudealert/claude_alert.star by Austin Daviscourt in tidbyt-community.
+The optional Claude theme retains the supplied animations and schema.
+
+Tidbyt, Tronbyt, Claude, OpenCode, Codex, and cmux are names of their
+respective projects or owners. This project is independent and is not
+affiliated with or endorsed by them. The default theme is harness-neutral.
