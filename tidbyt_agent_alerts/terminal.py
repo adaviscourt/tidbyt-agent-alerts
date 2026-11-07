@@ -39,6 +39,30 @@ def fit(text, width):
     return text
 
 
+def wrap_cells(text, width):
+    """Wrap menu copy without overflowing on wide Unicode characters."""
+    lines, line, cells = [], "", 0
+    for word in visible(text).split():
+        word_cells = sum(0 if unicodedata.combining(char) else
+                         (2 if unicodedata.east_asian_width(char) in "WF" else 1) for char in word)
+        if line and cells + 1 + word_cells > width:
+            lines.append(line)
+            line, cells = "", 0
+        if line:
+            line += " "
+            cells += 1
+        for char in word:
+            size = 0 if unicodedata.combining(char) else (2 if unicodedata.east_asian_width(char) in "WF" else 1)
+            if cells + size > width:
+                lines.append(line)
+                line, cells = "", 0
+            line += char
+            cells += size
+    if line:
+        lines.append(line)
+    return lines or [""]
+
+
 class Terminal:
     def __init__(self, *, plain=False, stream=None):
         self.stream = stream if stream is not None else sys.stdout
@@ -152,15 +176,14 @@ class Terminal:
         self.question(label)
         index = next((i for i, option in enumerate(options) if option[0] == default), 0)
         initial = ""
-        if self._can_select(len(options)):
-            result, initial = self._arrow_select(options, index, custom)
+        if self._can_select(len(options), lines=len(self._menu_lines(options, index))):
+            result, initial = self._arrow_select(options, index)
             if result is not None:
                 return result
         for number, (value, title, description) in enumerate(options, 1):
             suffix = " (default)" if value == default else ""
-            self.note(f"{number}. {title}{suffix}")
-            if description:
-                self.note("   " + description)
+            for line in self._option_lines(number, title + suffix, description):
+                self.write(line)
         self.note("Enter a number, name, or device ID." if custom else "Enter a number or name. Press Enter for the default.")
         while True:
             answer = initial + input(self.style(self.mark("│", "|")) + f"  [{visible(default)}] > " + initial)
@@ -177,9 +200,30 @@ class Terminal:
                 return answer
             self.warning("Choose one of the listed options.")
 
-    def _can_select(self, count):
+    def _can_select(self, count, *, lines=None):
         return (not self.plain and sys.stdin.isatty() and self.size.columns >= 52
-                and self.size.lines >= count + 8 and count <= 8)
+                and self.size.lines >= (lines if lines is not None else count) + 8 and count <= 8)
+
+    def _option_lines(self, number, title, description, *, selected=False):
+        prefix = f"{'>' if selected else ' '} {number}. "
+        indent = " " * len(prefix)
+        width = self.width - 3 - len(prefix)
+        rail = self.mark("│", "|") + "  "
+        lines = []
+        for index, line in enumerate(wrap_cells(title, width)):
+            label = (prefix if index == 0 else indent) + line
+            lines.append(rail + (self.style(label) if selected else label))
+        if description:
+            lines.extend(rail + indent + line for line in wrap_cells(description, width))
+        return lines
+
+    def _menu_lines(self, options, index):
+        hint = self.mark("↑/↓ to move · Enter to select · Esc to type",
+                         "Up/Down: move; Enter: select; Esc: type")
+        lines = [self.mark("│", "|") + "  " + hint]
+        for number, (_, title, description) in enumerate(options, 1):
+            lines.extend(self._option_lines(number, title, description, selected=number - 1 == index))
+        return lines
 
     @contextmanager
     def _keyboard(self):
@@ -204,16 +248,15 @@ class Terminal:
                 self.stream.write("\033[?25h")
                 self.stream.flush()
 
-    def _arrow_select(self, options, index, custom):
-        count = len(options) + 1
+    def _arrow_select(self, options, index):
+        count = 0
 
         def draw():
-            self.note("Up/down choose. Enter select. Esc type.")
-            for i, (_, title, description) in enumerate(options):
-                label = f"{i + 1}. {title}" + (f"  {description}" if description else "")
-                label = fit(label, self.width - 6)
-                self.write(self.mark("│", "|") + "  "
-                           + (self.style("> " + label) if i == index else "  " + label))
+            nonlocal count
+            lines = self._menu_lines(options, index)
+            count = len(lines)
+            for line in lines:
+                self.write(line)
 
         def erase():
             self.stream.write(f"\033[{count}A\r")

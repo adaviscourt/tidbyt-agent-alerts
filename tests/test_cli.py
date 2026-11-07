@@ -81,6 +81,9 @@ class CLITests(unittest.TestCase):
         self.assertIn("Review your setup", output)
         self.assertIn("4/4", output)
         self.assertNotIn("\033", output)
+        self.assertIn("Device ID: desk", output)
+        self.assertIn("Needs your input", output)
+        self.assertIn("A finished response does not mean the task is complete or successful.", output)
 
     @patch("tidbyt_agent_alerts.cli.render")
     @patch("tidbyt_agent_alerts.cli.Client")

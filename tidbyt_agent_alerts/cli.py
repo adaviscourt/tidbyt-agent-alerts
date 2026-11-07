@@ -76,17 +76,17 @@ def setup(args):
         if default == "pending":
             default = str(devices[0]["id"])
         options = [(str(device["id"]), clean(device.get("displayName", device["id"]), 80),
-                    clean(device["id"], 80)) for device in devices]
+                    "Device ID: " + clean(device["id"], 80)) for device in devices]
         values["TIDBYT_DEVICE_ID"] = ui.select("Choose your display", options, default, custom=True)
     else:
         default = values["TIDBYT_DEVICE_ID"]
         values["TIDBYT_DEVICE_ID"] = ui.prompt("Device ID", "" if default == "pending" else default)
     values = validate(values)
     device = ui.run("Device authentication", Client(values).device)
-    ui.step(2, 4, "Make it yours")
+    ui.step(2, 4, "Display appearance")
     values["TIDBYT_THEME"] = ui.select("Display theme", [
-        ("neutral", "Neutral", "Clear status labels for any agent"),
-        ("claude", "Claude", "The original animated Claude characters"),
+        ("neutral", "Neutral", "Text alerts: INPUT, DONE, or ERROR."),
+        ("claude", "Claude", "Animated Claude characters."),
     ], values["TIDBYT_THEME"])
     if values["TIDBYT_THEME"] == "claude":
         values["TIDBYT_ANIMATION"] = ui.select(
@@ -103,19 +103,21 @@ def setup(args):
     values = validate(values)
     # Check rendering before changing any persistent configuration or hook settings.
     ui.run("Display rendering", lambda: render(values, "Setup successful", "agent", "attention"))
-    ui.step(3, 4, "Choose your signals")
+    ui.step(3, 4, "Agent notifications")
     install_claude = ui.confirm("Install Claude Code hooks?", True,
                                 hint="Existing hooks are preserved. Other tools can use the notify command.")
     events = "attention"
     if install_claude:
         events = ui.select("When should Claude alert you?", [
-            ("attention", "Needs attention", "Permission requests and idle prompts"),
-            ("complete", "Response finished", "A response ended; not proof the task succeeded"),
-            ("both", "Both", "Attention requests and finished responses"),
+            ("attention", "Needs your input", "Permission requests or idle prompts."),
+            ("complete", "Response finished", "Each time Claude finishes a response."),
+            ("both", "Both", "Input requests and finished responses."),
         ], "attention")
+        if events in ("complete", "both"):
+            ui.note("A finished response does not mean the task is complete or successful.")
         claude.read_settings(args.claude_settings)  # Preflight malformed settings before saving credentials.
     ui.step(4, 4, "Review your setup")
-    event_label = {"attention": "Needs attention", "complete": "Response finished", "both": "Both"}[events]
+    event_label = {"attention": "Needs your input", "complete": "Response finished", "both": "Input + response finished"}[events]
     try:
         config_label = "~/" + args.config.relative_to(Path.home()).as_posix()
     except ValueError:

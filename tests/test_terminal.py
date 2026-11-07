@@ -4,16 +4,18 @@ import io
 import json
 import os
 import pty
+import re
 import select
 import signal
 import sys
 import time
+import unicodedata
 import unittest
 import warnings
 from unittest.mock import patch
 
 from tidbyt_agent_alerts.config import AlertError
-from tidbyt_agent_alerts.terminal import Terminal, fit, visible
+from tidbyt_agent_alerts.terminal import Terminal, fit, visible, wrap_cells
 
 
 OPTIONS = [("neutral", "Neutral", "Any agent"), ("claude", "Claude", "Original animations")]
@@ -73,6 +75,54 @@ class TerminalTests(unittest.TestCase):
             self.assertEqual(ui.select("Theme", OPTIONS, "neutral"), "claude")
         with patch("builtins.input", return_value="custom-device-id"):
             self.assertEqual(ui.select("Device", OPTIONS, "neutral", custom=True), "custom-device-id")
+
+    def test_menu_separates_labels_from_descriptions_and_highlights_only_label(self):
+        with patch.dict(os.environ, {"TERM": "xterm"}, clear=True):
+            ui = Terminal(stream=TTYBuffer())
+        lines = ui._menu_lines([("desk", "Desk display", "Device ID: desk")], 0)
+        self.assertEqual(len(lines), 3)
+        self.assertIn("\033[33m> 1. Desk display\033[0m", lines[1])
+        self.assertEqual(lines[2], "│       Device ID: desk")
+        self.assertNotIn("Device ID", lines[1])
+        self.assertNotIn("\033", lines[2])
+
+    def test_plain_menu_preserves_description_indentation(self):
+        stream = io.StringIO()
+        ui = Terminal(stream=stream, plain=True)
+        with patch("builtins.input", return_value=""):
+            ui.select("Display", [("desk", "Desk display", "Device ID: desk")], "desk")
+        self.assertIn("|    1. Desk display (default)\n|       Device ID: desk\n", stream.getvalue())
+        self.assertNotIn("\033", stream.getvalue())
+
+    def test_menu_wraps_long_copy_without_losing_text(self):
+        with patch("shutil.get_terminal_size", return_value=os.terminal_size((52, 24))):
+            ui = Terminal(stream=io.StringIO(), plain=True)
+        title = "A display name that is much too long for a single menu row"
+        description = "Device ID: " + "x" * 90
+        lines = ui._menu_lines([("desk", title, description)], 0)
+        self.assertTrue(all(len(line) <= ui.width for line in lines))
+        self.assertIn(title, " ".join(line[8:] for line in lines[1:]))
+        self.assertEqual("".join(line[8:] for line in lines[3:]).replace(" ", ""),
+                         description.replace(" ", ""))
+
+    def test_arrow_menu_falls_back_when_wrapped_rows_exceed_terminal_height(self):
+        with patch.dict(os.environ, {"TERM": "xterm"}, clear=True), \
+                patch("shutil.get_terminal_size", return_value=os.terminal_size((52, 16))), \
+                patch("sys.stdin.isatty", return_value=True):
+            ui = Terminal(stream=TTYBuffer())
+            options = [("desk", "Desk display", "An explanation " * 12), OPTIONS[1]]
+            with patch.object(ui, "_arrow_select") as arrow, patch("builtins.input", return_value="1"):
+                self.assertEqual(ui.select("Display", options, "desk"), "desk")
+            arrow.assert_not_called()
+
+    def test_wide_unicode_menu_copy_fits_terminal_cells(self):
+        text = "显示器" * 15 + " desk e\u0301"
+        lines = wrap_cells(text, 42)
+        self.assertEqual("".join(lines).replace(" ", ""), text.replace(" ", ""))
+        for line in lines:
+            width = sum(0 if unicodedata.combining(char) else
+                        (2 if unicodedata.east_asian_width(char) in "WF" else 1) for char in line)
+            self.assertLessEqual(width, 42)
 
     def test_invalid_integer_reprompts_in_place(self):
         stream = io.StringIO()
@@ -135,12 +185,12 @@ class TerminalTests(unittest.TestCase):
 
 
 class KeyboardTests(unittest.TestCase):
-    def run_menu(self, keys, *, plain=False):
+    def run_menu(self, keys, *, plain=False, description="Any agent", columns=80):
         program = '''import json, termios
 from tidbyt_agent_alerts.terminal import Terminal
 before = termios.tcgetattr(0)
 try:
-    result = Terminal(plain=PLAIN).select("Theme", [("neutral", "Neutral", "Any agent"), ("claude", "Claude", "Animations")], "neutral")
+    result = Terminal(plain=PLAIN).select("Theme", [("neutral", "Neutral", DESCRIPTION), ("claude", "Claude", "Animations")], "neutral")
 except KeyboardInterrupt:
     result = "canceled"
 after = termios.tcgetattr(0)
@@ -148,8 +198,8 @@ after = termios.tcgetattr(0)
 before[3] &= ~getattr(termios, "PENDIN", 0)
 after[3] &= ~getattr(termios, "PENDIN", 0)
 print("RESULT=" + json.dumps({"selected": result, "restored": before == after}))
-'''.replace("PLAIN", repr(plain))
-        environment = os.environ | {"TERM": "xterm-256color", "COLUMNS": "80", "LINES": "24"}
+'''.replace("PLAIN", repr(plain)).replace("DESCRIPTION", repr(description))
+        environment = os.environ | {"TERM": "xterm-256color", "COLUMNS": str(columns), "LINES": "24"}
         environment.pop("NO_COLOR", None)
         environment.pop("TIDBYT_AGENT_ALERTS_PLAIN", None)
         pid, master = pty.fork()
@@ -193,6 +243,16 @@ print("RESULT=" + json.dumps({"selected": result, "restored": before == after}))
         result, output = self.run_menu(b"\033[B\r")
         self.assertEqual(result, {"selected": "claude", "restored": True})
         self.assertIn(b"\033[?25h", output)
+
+    def test_wrapped_menu_redraw_erases_exact_number_of_rows(self):
+        result, output = self.run_menu(b"\033[B\r", columns=52, description="Long explanation " * 6)
+        self.assertEqual(result, {"selected": "claude", "restored": True})
+        first_frame = output.split(b"\033[?25l")[0]
+        row_count = first_frame.count(b"\n") - 2  # The question and its leading blank rail.
+        self.assertGreater(row_count, 5)
+        moves = re.findall(rb"\033\[(\d+)A", output)
+        self.assertTrue(moves)
+        self.assertTrue(all(int(move) == row_count for move in moves))
 
     def test_ctrl_c_restores_cursor_and_terminal_echo(self):
         result, output = self.run_menu(b"\x03")

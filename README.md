@@ -140,6 +140,8 @@ The wizard groups setup into four steps: connect your display, choose its
 appearance, choose agent signals, and review before saving. Supported
 terminals offer arrow-key menus: use Up/Down, then Enter. Press Esc or start
 typing a name to switch to typed choices. Numeric fields validate in place.
+Menu descriptions appear below each option; device identifiers are labeled
+`Device ID`. Long labels and descriptions wrap rather than running together.
 No credentials or hooks are written until you confirm the review.
 
 For screen readers or simpler terminals, use `tidbyt-agent-alerts --plain setup`.
