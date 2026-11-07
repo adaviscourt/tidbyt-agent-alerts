@@ -30,6 +30,7 @@ import sys
 parser = argparse.ArgumentParser()
 parser.add_argument("--prefix", type=Path, required=True)
 parser.add_argument("--no-setup", action="store_true")
+parser.add_argument("--plain", action="store_true")
 args = parser.parse_args()
 result = {"isatty": sys.stdin.isatty(), "no_setup": args.no_setup}
 if not args.no_setup:
@@ -122,6 +123,12 @@ shutil.copyfile(root / filename, output)
         result = self.run_bootstrap("--no-setup", "--version", "v" + VERSION)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(self.requests()[0]["url"].endswith(f"/download/v{VERSION}/SHA256SUMS"))
+
+    def test_plain_flag_is_forwarded_without_ansi_output(self):
+        result = self.run_bootstrap("--no-setup", "--plain")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("\033", result.stdout + result.stderr)
+        self.assertTrue((self.prefix / "result.json").exists())
 
     def test_piped_interactive_setup_uses_controlling_terminal(self):
         pid, master = pty.fork()

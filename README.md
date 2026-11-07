@@ -61,6 +61,9 @@ curl -fsSL https://github.com/adaviscourt/tidbyt-agent-alerts/releases/download/
 
 # Download the bootstrap first for headless installation:
 bash bootstrap.sh --no-setup --prefix "$HOME/tools"
+
+# Screen-reader-friendly output and typed choices:
+bash bootstrap.sh --plain
 ```
 
 `--version` also accepts a leading `v`. Without it, the bootstrap resolves
@@ -108,6 +111,7 @@ Install without setup, or into a different prefix:
 ```sh
 ./install.sh --no-setup
 ./install.sh --prefix "$HOME/tools"
+./install.sh --plain
 ```
 
 ## Guided setup
@@ -131,6 +135,19 @@ Setup asks for:
    restore the device's reported prior brightness.
 6. **Claude hooks**: attention, response finished, or both. Default: attention.
 7. **Test alert**: optional confirmation that the full path works.
+
+The wizard groups setup into four steps: connect your display, choose its
+appearance, choose agent signals, and review before saving. Supported
+terminals offer arrow-key menus: use Up/Down, then Enter. Press Esc or start
+typing a name to switch to typed choices. Numeric fields validate in place.
+No credentials or hooks are written until you confirm the review.
+
+For screen readers or simpler terminals, use `tidbyt-agent-alerts --plain setup`.
+The installer and bootstrap accept `--plain` too. `NO_COLOR`, `TERM=dumb`, and
+redirected output disable color and cursor-driven menus automatically; narrow
+terminals use typed menus. The interface uses your terminal's native colors,
+never relies on color alone, and has no animation. Terminal settings and the
+cursor are restored when a menu is interrupted.
 
 Configuration is written to `~/.config/tidbyt-agent-alerts/config.env` with
 owner-only permissions (`0600`). `XDG_CONFIG_HOME` is respected. Values are
@@ -256,6 +273,7 @@ From a Git checkout:
 python3 -m unittest discover -s tests -v
 python3 scripts/check_render.py  # requires Pixlet, no device/API credentials
 python3 scripts/package.py      # writes archive + SHA256SUMS to dist/
+python3 scripts/preview_setup.py # interactive UI demo, fake devices, disposable settings
 ```
 
 Architecture: `alerts.py` owns delivery, rendering, deduplication, and device

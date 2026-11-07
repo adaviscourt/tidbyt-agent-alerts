@@ -3,7 +3,7 @@
 main() (
     set -euo pipefail
 
-    local version="" no_setup=false prefix=""
+    local version="" no_setup=false prefix="" plain=false
     while [ "$#" -gt 0 ]; do
         case "$1" in
             --version|--prefix)
@@ -19,14 +19,24 @@ main() (
                 shift 2
                 ;;
             --no-setup) no_setup=true; shift ;;
+            --plain) plain=true; shift ;;
             --help|-h)
-                echo 'Usage: bootstrap.sh [--version VERSION] [--prefix DIRECTORY] [--no-setup]'
+                echo 'Usage: bootstrap.sh [--version VERSION] [--prefix DIRECTORY] [--no-setup] [--plain]'
                 echo 'Downloads a verified GitHub release, installs it, and opens terminal setup.'
                 exit 0
                 ;;
             *) echo "Unknown option: $1" >&2; exit 1 ;;
         esac
     done
+
+    local accent="" reset=""
+    if [ -t 1 ] && ! "$plain" && [ -z "${NO_COLOR+x}" ] \
+        && [ "${TERM:-}" != dumb ] && [ "${TIDBYT_AGENT_ALERTS_PLAIN:-}" != 1 ]; then
+        accent=$'\033[33m'
+        reset=$'\033[0m'
+    fi
+    printf '\n%sTidbyt Agent Alerts%s\n  Download > verify > install\n\n' "$accent" "$reset"
+    stage() { printf '  %s%s%s  %s\n' "$accent" "$1" "$reset" "$2"; }
 
     case "$(uname -s)" in
         Darwin|Linux) ;;
@@ -78,7 +88,7 @@ PY
     else
         checksum_url="$release_root/latest/download/SHA256SUMS"
     fi
-    echo 'Downloading release checksums...'
+    stage '1/3' 'Downloading release checksums...'
     if ! curl --fail --silent --show-error --location \
         --proto '=https' --proto-redir '=https' --connect-timeout 10 --max-time 120 --retry 2 \
         --max-filesize 65536 --output "$work_dir/SHA256SUMS" "$checksum_url"; then
@@ -105,7 +115,7 @@ if requested and version != requested:
 print(version)
 PY
 )"
-    echo "Downloading Tidbyt Agent Alerts $version..."
+    stage '2/3' "Downloading Tidbyt Agent Alerts $version..."
     if ! curl --fail --silent --show-error --location \
         --proto '=https' --proto-redir '=https' --connect-timeout 10 --max-time 120 --retry 2 \
         --max-filesize 20971520 --output "$work_dir/release.tar.gz" \
@@ -113,6 +123,7 @@ PY
         echo 'Could not download the release archive. No program files were installed.' >&2
         exit 1
     fi
+    stage '3/3' 'Verifying release and archive...'
     "$python" - "$work_dir" <<'PY'
 import hashlib
 import json
@@ -161,11 +172,13 @@ if not (destination / expected / "install.py").is_file():
 print("Release checksum and archive verified.")
 PY
     local installer="$work_dir/extracted/tidbyt-agent-alerts-$version/install.py"
+    local -a flags=(--prefix "$prefix")
+    if "$plain"; then flags+=(--plain); fi
     if "$no_setup"; then
-        "$python" "$installer" --prefix "$prefix" --no-setup </dev/null
+        "$python" "$installer" "${flags[@]}" --no-setup </dev/null
     else
         # stdin is the terminal, not the pipe containing this bootstrap script.
-        "$python" "$installer" --prefix "$prefix" <&3
+        "$python" "$installer" "${flags[@]}" <&3
     fi
 )
 

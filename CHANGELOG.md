@@ -2,6 +2,8 @@
 
 ## 0.1.0 — Unreleased
 
+- Polish installation with a four-step wizard, arrow-key menus, inline
+  validation, a review-before-save screen, and accessible plain mode.
 - Add a one-command bootstrap with verified release downloads, safe archive
   extraction, terminal-backed interactive setup, and version pinning.
 - Introduce the harness-independent `tidbyt-agent-alerts` CLI.

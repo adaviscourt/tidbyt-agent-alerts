@@ -32,6 +32,13 @@ class InstallTests(unittest.TestCase):
         self.assertNotIn(str(ROOT), launcher.read_text())
         self.assertEqual(launcher.stat().st_mode & 0o777, 0o755)
 
+    def test_plain_install_remains_readable_without_control_sequences(self):
+        result = subprocess.run([sys.executable, str(ROOT / "install.py"), "--prefix", str(self.prefix),
+                                 "--no-setup", "--plain"], env=self.env, cwd=self.home,
+                                capture_output=True, text=True, check=True)
+        self.assertIn("Command installed", result.stdout)
+        self.assertNotIn("\033", result.stdout + result.stderr)
+
     def test_installed_hooks_use_stable_launcher_not_run_script(self):
         launcher = install(self.prefix, ROOT)
         config = self.home / "config.env"
