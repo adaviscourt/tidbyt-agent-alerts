@@ -65,12 +65,12 @@ class CLITests(unittest.TestCase):
     @patch("tidbyt_agent_alerts.cli.render")
     @patch("tidbyt_agent_alerts.cli.Client")
     @patch("tidbyt_agent_alerts.cli.shutil.which", return_value="/usr/bin/pixlet")
-    @patch("tidbyt_agent_alerts.cli.getpass.getpass", return_value="setup-key")
+    @patch("tidbyt_agent_alerts.terminal.getpass.getpass", return_value="setup-key")
     @patch("sys.stdin.isatty", return_value=True)
     def test_guided_setup_creates_private_config_and_hooks(self, isatty, secret, which, client, render):
         client.return_value.devices.return_value = [{"id": "desk", "displayName": "Desk"}]
         client.return_value.device.return_value = {"id": "desk"}
-        answers = ["", "1", "neutral", "n", "y", "both", "n"]
+        answers = ["", "1", "neutral", "n", "y", "both", "y", "n"]
         with patch("builtins.input", side_effect=answers):
             code, output, error = self.invoke("setup")
         self.assertEqual(code, 0, error)
@@ -78,6 +78,27 @@ class CLITests(unittest.TestCase):
         self.assertEqual(load(self.config)["TIDBYT_DEVICE_ID"], "desk")
         self.assertEqual(set(json.loads(self.claude_settings.read_text())["hooks"]), {"Notification", "Stop"})
         self.assertNotIn("setup-key", output + error)
+        self.assertIn("Review your setup", output)
+        self.assertIn("4/4", output)
+        self.assertNotIn("\033", output)
+        self.assertIn("Device ID: desk", output)
+        self.assertIn("Needs your input", output)
+        self.assertIn("A finished response does not mean the task is complete or successful.", output)
+
+    @patch("tidbyt_agent_alerts.cli.render")
+    @patch("tidbyt_agent_alerts.cli.Client")
+    @patch("tidbyt_agent_alerts.cli.shutil.which", return_value="/usr/bin/pixlet")
+    @patch("tidbyt_agent_alerts.terminal.getpass.getpass", return_value="setup-key")
+    @patch("sys.stdin.isatty", return_value=True)
+    def test_review_can_cancel_without_writing_any_files(self, isatty, secret, which, client, render):
+        client.return_value.devices.return_value = [{"id": "desk", "displayName": "Desk"}]
+        client.return_value.device.return_value = {"id": "desk"}
+        with patch("builtins.input", side_effect=["", "1", "neutral", "n", "y", "attention", "n"]):
+            code, output, error = self.invoke("--plain", "setup")
+        self.assertEqual(code, 0, error)
+        self.assertIn("No configuration changes were saved", output)
+        self.assertFalse(self.config.exists())
+        self.assertFalse(self.claude_settings.exists())
 
     @patch("sys.stdin.isatty", return_value=False)
     def test_noninteractive_setup_does_not_save_credentials(self, isatty):

@@ -62,17 +62,26 @@ def main():
     parser = argparse.ArgumentParser(description="Install Tidbyt Agent Alerts, then start guided setup.")
     parser.add_argument("--prefix", type=Path, default=Path.home() / ".local", help="install prefix (default: ~/.local)")
     parser.add_argument("--no-setup", action="store_true", help="install files without configuring credentials or hooks")
+    parser.add_argument("--plain", action="store_true", help="use plain output and typed choices")
     args = parser.parse_args()
+    from tidbyt_agent_alerts.terminal import Terminal
+
+    ui = Terminal(plain=args.plain)
+    if args.no_setup:
+        ui.intro("Install the command. Configure your display when you are ready.")
     try:
-        launcher = install(args.prefix.expanduser().resolve(), Path(__file__).resolve().parent)
+        launcher = ui.run("Install command", lambda: install(args.prefix.expanduser().resolve(), Path(__file__).resolve().parent))
     except (OSError, RuntimeError) as error:
-        print(f"Install failed: {error}", file=sys.stderr)
+        Terminal(plain=args.plain, stream=sys.stderr).error(f"Install failed: {error}")
         return 1
-    print(f"Installed: {launcher}", flush=True)
+    ui.note(f"Installed: {launcher}")
     if str(launcher.parent) not in os.environ.get("PATH", "").split(os.pathsep):
-        print("To add the command to this shell: export PATH=" + shlex.quote(str(launcher.parent)) + ':"$PATH"', flush=True)
+        ui.note("Add the command to this shell:")
+        # Keep the shell command intact and copyable, even if it wraps visually.
+        ui.write("   export PATH=" + shlex.quote(str(launcher.parent)) + ':"$PATH"')
     if not args.no_setup:
-        return subprocess.call([str(launcher), "setup"])
+        return subprocess.call([str(launcher)] + (["--plain"] if args.plain else []) + ["setup"])
+    ui.finish("Command installed", f"Start guided setup: {shlex.quote(str(launcher))} setup")
     return 0
 
 

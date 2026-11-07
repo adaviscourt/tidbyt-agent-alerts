@@ -1,7 +1,6 @@
 """Small standard-library CLI with interactive setup and explicit integrations."""
 
 import argparse
-import getpass
 import json
 from pathlib import Path
 import shlex
@@ -14,29 +13,7 @@ from .api import Client
 from .config import (
     AlertError, DEFAULTS, config_path, load, read_env, state_dir, validate, write_env,
 )
-
-
-def prompt(label, default=""):
-    suffix = f" [{default}]" if default else ""
-    return input(label + suffix + ": ").strip() or default
-
-
-def yes(label, default=False):
-    while True:
-        answer = prompt(label + (" [Y/n]" if default else " [y/N]")).lower()
-        if not answer:
-            return default
-        if answer in ("y", "yes", "n", "no"):
-            return answer in ("y", "yes")
-        print("Enter yes or no.")
-
-
-def choice(label, options, default):
-    while True:
-        answer = prompt(f"{label} ({'/'.join(options)})", default)
-        if answer in options:
-            return answer
-        print("Choose one of: " + ", ".join(options))
+from .terminal import Terminal
 
 
 def launcher_path():
@@ -57,90 +34,134 @@ def setup(args):
     values = DEFAULTS.copy()
     if args.config.exists():
         values.update(read_env(args.config))
-    print("Tidbyt Agent Alerts setup\nCredentials stay on this computer. No hosted service is used.\n")
-    values["TIDBYT_BASE_URL"] = prompt(
-        "API base URL (Tronbyt: https://your-server/v0/devices)", values["TIDBYT_BASE_URL"],
-    ).rstrip("/")
-    values["TIDBYT_ALLOW_HTTP"] = "false"
-    if values["TIDBYT_BASE_URL"].startswith("http:"):
-        print("WARNING: HTTP sends your API key unencrypted. Use HTTPS unless you trust this network.")
-        if not yes("Allow unencrypted HTTP for this server?"):
-            raise AlertError("Setup canceled; no configuration was saved.")
-        values["TIDBYT_ALLOW_HTTP"] = "true"
-    keep_key = " (Enter keeps existing key)" if values.get("TIDBYT_API_KEY") else ""
-    values["TIDBYT_API_KEY"] = getpass.getpass("Device API key" + keep_key + ": ").strip() or values.get("TIDBYT_API_KEY", "")
-    values.setdefault("TIDBYT_DEVICE_ID", "pending")
-    values = validate(values)
-    client = Client(values)
-    try:
-        devices = client.devices()
-    except AlertError:
-        devices = []
-        print("Device listing unavailable; enter the device ID manually.")
-    if devices:
-        for index, device in enumerate(devices, 1):
-            name = clean(device.get("displayName", device["id"]), 80)
-            print(f"  {index}. {name} ({clean(device['id'], 80)})")
-        default = values["TIDBYT_DEVICE_ID"]
-        if default == "pending":
-            default = "1"
-        selected = prompt("Device number or device ID", default)
-        if selected.isdigit() and 1 <= int(selected) <= len(devices):
-            selected = str(devices[int(selected) - 1]["id"])
-        values["TIDBYT_DEVICE_ID"] = selected
-    else:
-        default = values["TIDBYT_DEVICE_ID"]
-        values["TIDBYT_DEVICE_ID"] = prompt("Device ID", "" if default == "pending" else default)
-    values = validate(values)
-    Client(values).device()
+    ui = Terminal(plain=args.plain)
+    ui.intro("A small signal from your agent to your display.")
+    ui.note("Your key is saved privately on this computer. No hosted service is used.")
     pixlet = shutil.which(values["TIDBYT_PIXLET"])
     if not pixlet:
         raise AlertError("Install Pixlet first: https://github.com/tidbyt/pixlet#installation. Then rerun setup.")
     values["TIDBYT_PIXLET"] = str(Path(pixlet).resolve())
-    values["TIDBYT_THEME"] = choice("Display theme", ("neutral", "claude"), values["TIDBYT_THEME"])
+    ui.step(1, 4, "Connect your display")
+
+    def endpoint(value):
+        validate(DEFAULTS | {"TIDBYT_API_KEY": "pending", "TIDBYT_DEVICE_ID": "pending",
+                             "TIDBYT_BASE_URL": value, "TIDBYT_ALLOW_HTTP": "true"})
+
+    def api_key(value):
+        if not value:
+            raise AlertError("Enter a device API key.")
+        validate(DEFAULTS | {"TIDBYT_API_KEY": value, "TIDBYT_DEVICE_ID": "pending"})
+
+    values["TIDBYT_BASE_URL"] = ui.prompt(
+        "API base URL", values["TIDBYT_BASE_URL"], validator=endpoint,
+        hint="Keep the default for Tidbyt. Tronbyt: https://your-server/v0/devices",
+    ).rstrip("/")
+    values["TIDBYT_ALLOW_HTTP"] = "false"
+    if values["TIDBYT_BASE_URL"].startswith("http:"):
+        ui.warning("HTTP sends your API key unencrypted. Use HTTPS unless you trust this network.")
+        if not ui.confirm("Allow unencrypted HTTP for this server?"):
+            raise AlertError("Setup canceled; no configuration was saved.")
+        values["TIDBYT_ALLOW_HTTP"] = "true"
+    values["TIDBYT_API_KEY"] = ui.secret("Device API key", existing=values.get("TIDBYT_API_KEY", ""), validator=api_key)
+    values.setdefault("TIDBYT_DEVICE_ID", "pending")
+    values = validate(values)
+    client = Client(values)
+    try:
+        devices = ui.run("Device discovery", client.devices)
+    except AlertError:
+        devices = []
+        ui.warning("Device listing is unavailable. Enter your device ID instead.")
+    if devices:
+        default = values["TIDBYT_DEVICE_ID"]
+        if default == "pending":
+            default = str(devices[0]["id"])
+        options = [(str(device["id"]), clean(device.get("displayName", device["id"]), 80),
+                    "Device ID: " + clean(device["id"], 80)) for device in devices]
+        values["TIDBYT_DEVICE_ID"] = ui.select("Choose your display", options, default, custom=True)
+    else:
+        default = values["TIDBYT_DEVICE_ID"]
+        values["TIDBYT_DEVICE_ID"] = ui.prompt("Device ID", "" if default == "pending" else default)
+    values = validate(values)
+    device = ui.run("Device authentication", Client(values).device)
+    ui.step(2, 4, "Display appearance")
+    values["TIDBYT_THEME"] = ui.select("Display theme", [
+        ("neutral", "Neutral", "Text alerts: INPUT, DONE, or ERROR."),
+        ("claude", "Claude", "Animated Claude characters."),
+    ], values["TIDBYT_THEME"])
     if values["TIDBYT_THEME"] == "claude":
-        values["TIDBYT_ANIMATION"] = choice(
-            "Claude animation", ("thinking", "loading", "sparkle", "wave"), values["TIDBYT_ANIMATION"],
+        values["TIDBYT_ANIMATION"] = ui.select(
+            "Claude animation", [(key, key.title(), "") for key in ("thinking", "loading", "sparkle", "wave")],
+            values["TIDBYT_ANIMATION"],
         )
-    if yes("Temporarily boost brightness?", bool(values["TIDBYT_ALERT_BRIGHTNESS"])):
-        values["TIDBYT_ALERT_BRIGHTNESS"] = prompt("Alert brightness (0-100)", values["TIDBYT_ALERT_BRIGHTNESS"] or "100")
-        values["TIDBYT_ALERT_SECONDS"] = prompt("Seconds before restoring prior brightness (1-120)", values["TIDBYT_ALERT_SECONDS"])
+    if ui.confirm("Temporarily boost brightness?", bool(values["TIDBYT_ALERT_BRIGHTNESS"]),
+                  hint="Off by default. If enabled, the prior brightness is restored afterward."):
+        values["TIDBYT_ALERT_BRIGHTNESS"] = ui.integer("Alert brightness", values["TIDBYT_ALERT_BRIGHTNESS"] or "100", 0, 100)
+        values["TIDBYT_ALERT_SECONDS"] = ui.integer("Restore brightness after how many seconds?", values["TIDBYT_ALERT_SECONDS"], 1, 120,
+                                                   hint="This does not control how long the image stays on screen.")
     else:
         values["TIDBYT_ALERT_BRIGHTNESS"] = ""
     values = validate(values)
     # Check rendering before changing any persistent configuration or hook settings.
-    render(values, "Setup successful", "agent", "attention")
-    install_claude = yes("Install Claude Code hooks?", True)
+    ui.run("Display rendering", lambda: render(values, "Setup successful", "agent", "attention"))
+    ui.step(3, 4, "Agent notifications")
+    install_claude = ui.confirm("Install Claude Code hooks?", True,
+                                hint="Existing hooks are preserved. Other tools can use the notify command.")
     events = "attention"
     if install_claude:
-        events = choice("Alert when Claude needs attention, finishes a response, or both", ("attention", "complete", "both"), "attention")
+        events = ui.select("When should Claude alert you?", [
+            ("attention", "Needs your input", "Permission requests or idle prompts."),
+            ("complete", "Response finished", "Each time Claude finishes a response."),
+            ("both", "Both", "Input requests and finished responses."),
+        ], "attention")
+        if events in ("complete", "both"):
+            ui.note("A finished response does not mean the task is complete or successful.")
         claude.read_settings(args.claude_settings)  # Preflight malformed settings before saving credentials.
-    write_env(args.config, values)
-    print(f"Saved private config: {args.config}")
+    ui.step(4, 4, "Review your setup")
+    event_label = {"attention": "Needs your input", "complete": "Response finished", "both": "Input + response finished"}[events]
+    try:
+        config_label = "~/" + args.config.relative_to(Path.home()).as_posix()
+    except ValueError:
+        config_label = str(args.config)
+    ui.summary([
+        ("Display", clean(device.get("displayName", values["TIDBYT_DEVICE_ID"]), 80)),
+        ("API", values["TIDBYT_BASE_URL"]),
+        ("Theme", values["TIDBYT_THEME"].title() + (f" / {values['TIDBYT_ANIMATION']}" if values["TIDBYT_THEME"] == "claude" else "")),
+        ("Brightness", "Unchanged" if not values["TIDBYT_ALERT_BRIGHTNESS"] else f"{values['TIDBYT_ALERT_BRIGHTNESS']}% for {values['TIDBYT_ALERT_SECONDS']}s, then restore"),
+        ("Claude hooks", event_label if install_claude else "Not installed"),
+        ("API key", "Hidden; saved with owner-only access"),
+        ("Config", config_label),
+    ], title=None)
+    if not ui.confirm("Save this configuration" + (" and install hooks?" if install_claude else "?"), True):
+        ui.finish("Setup canceled", "No configuration changes were saved.")
+        return
+    ui.run("Private configuration saved", lambda: write_env(args.config, values))
     if install_claude:
-        claude.install(args.claude_settings, launcher_path(), args.config, events)
-        print("Installed Claude Code hooks. Restart Claude Code to load them.")
-    if yes("Send a test alert now?", True):
-        result = notify(values, state_dir(), message="Tidbyt Agent Alerts is ready", source="agent", event="attention", force=True)
-        print("Test: " + result)
-    print("Setup complete. Other integrations can use: tidbyt-agent-alerts notify --source NAME")
+        ui.run("Claude Code hooks installed", lambda: claude.install(args.claude_settings, launcher_path(), args.config, events))
+    if ui.confirm("Send a test alert now?", True):
+        result = ui.run("Test notification", lambda: notify(values, state_dir(), message="Tidbyt Agent Alerts is ready", source="agent", event="attention", force=True))
+        ui.note("Test: " + result)
+    ui.finish("Setup complete", "Restart Claude Code to load your hooks." if install_claude else "Your display is ready for the notify command.")
+    ui.write("   Check setup:  tidbyt-agent-alerts doctor")
+    ui.write("   Other tools:  tidbyt-agent-alerts notify --source NAME")
+    ui.write()
 
 
 def doctor(args):
+    ui = Terminal(plain=args.plain)
+    ui.intro("Check the connection without sending an alert.")
     values = load(args.config)
-    print("OK: private configuration")
-    device = Client(values).device()
-    print("OK: authenticated device " + clean(device.get("displayName", values["TIDBYT_DEVICE_ID"]), 80))
-    render(values, "Diagnostics", "agent", "attention")
-    print("OK: Pixlet rendering (no image pushed)")
+    ui.status("Private configuration")
+    device = ui.run("Device authentication", Client(values).device)
+    ui.note("Display: " + clean(device.get("displayName", values["TIDBYT_DEVICE_ID"]), 80))
+    ui.run("Pixlet rendering (no image pushed)", lambda: render(values, "Diagnostics", "agent", "attention"))
     settings = claude.read_settings(args.claude_settings)
     count = sum(claude.owned(group) for groups in settings.get("hooks", {}).values() for group in groups)
-    print(f"Claude Code: {count} managed hook group(s)")
+    ui.status(f"Claude Code: {count} managed hook group(s)")
     if settings.get("disableAllHooks"):
-        print("WARNING: Claude settings disable hooks.")
+        ui.warning("Claude settings disable hooks.")
     if "claude-alert.sh" in json.dumps(settings):
-        print("WARNING: legacy claude-alert.sh hook found; remove it manually to prevent duplicate alerts.")
-    print("Restart Claude Code after changing hooks. Managed policy may restrict hooks.")
+        ui.warning("Legacy claude-alert.sh hook found; remove it manually to prevent duplicate alerts.")
+    ui.finish("Checks complete", "Restart Claude Code after changing hooks. Managed policy may restrict hooks.")
 
 
 def hook(args):
@@ -186,7 +207,7 @@ def uninstall(args):
                 raise AlertError("Launcher is not owned by this installation; no changes made.")
     print("This removes managed Claude hooks" + (" and the installed CLI." if installed else "."))
     print("Credentials and settings backups are kept unless --purge is specified.")
-    if not args.yes and not yes("Continue?"):
+    if not args.yes and not Terminal(plain=args.plain).confirm("Continue?"):
         return
     claude.uninstall(args.claude_settings)
     if args.purge:
@@ -200,6 +221,7 @@ def uninstall(args):
 def parser():
     result = argparse.ArgumentParser(prog="tidbyt-agent-alerts", description="Local agent notifications for Tidbyt and Tronbyt.")
     result.add_argument("--version", action="version", version=__version__)
+    result.add_argument("--plain", action="store_true", help="disable color and interactive menus (screen-reader-friendly)")
     result.add_argument("--config", type=Path, default=config_path(), help="private config.env path")
     result.add_argument("--claude-settings", type=Path, default=claude.settings_path(), help="Claude settings.json path")
     commands = result.add_subparsers(dest="command", required=True)
@@ -251,9 +273,9 @@ def main(argv=None):
             print(notify(values, state_dir(), **data))
     except (AlertError, OSError) as error:
         message = str(error) if isinstance(error, AlertError) else "Filesystem operation failed. Check file paths and permissions."
-        print("Error: " + message, file=sys.stderr)
+        Terminal(plain=args.plain, stream=sys.stderr).error(message)
         return 1
     except (EOFError, KeyboardInterrupt):
-        print("\nCanceled.", file=sys.stderr)
+        print("\nCanceled. You can rerun setup when you are ready.", file=sys.stderr)
         return 130
     return 0
