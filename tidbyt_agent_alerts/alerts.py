@@ -1,6 +1,7 @@
 """Shared notification engine; no harness-specific dependencies."""
 
 from contextlib import contextmanager
+import base64
 import fcntl
 import hashlib
 import json
@@ -43,12 +44,17 @@ def render(values, message, source, event):
     if not executable:
         raise AlertError("Pixlet not found. Install Pixlet, then rerun setup.")
     theme = values["TIDBYT_THEME"]
-    script = ASSETS / ("claude.star" if theme == "claude" else "alert.star")
+    artwork = {"codex": "codex-loop.gif", "opencode": "opencode.png"}.get(source) if theme == "agent" else None
+    script = ASSETS / ("agent.star" if artwork else "claude.star" if theme == "claude" else "alert.star")
     with tempfile.TemporaryDirectory(prefix="tidbyt-agent-alerts-") as directory:
         # Newer Pixlet scans sibling .star files even in single-file mode.
         # Isolate the selected, self-contained theme from other app entry points.
         isolated = Path(directory) / "alert.star"
-        shutil.copyfile(script, isolated)
+        if artwork:
+            encoded = base64.b64encode((ASSETS / artwork).read_bytes()).decode("ascii")
+            isolated.write_text(script.read_text().replace("__ARTWORK__", encoded))
+        else:
+            shutil.copyfile(script, isolated)
         output = Path(directory) / "alert.webp"
         command = [executable, "render", str(isolated), f"message={message}",
                    f"source={source}", f"event={event}",

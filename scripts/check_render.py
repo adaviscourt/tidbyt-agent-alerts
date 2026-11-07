@@ -18,3 +18,8 @@ for animation in ("thinking", "loading", "sparkle", "wave"):
     image = render(values, "Claude needs your attention", "claude", "attention")
     assert image[:4] == b"RIFF" and image[8:12] == b"WEBP"
     print(f"OK: claude / {animation}")
+
+for source in ("codex", "opencode", "other"):
+    image = render(DEFAULTS | {"TIDBYT_THEME": "agent"}, "Agent needs attention", source, "attention")
+    assert image[:4] == b"RIFF" and image[8:12] == b"WEBP"
+    print(f"OK: agent / {source}")

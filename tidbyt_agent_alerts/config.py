@@ -109,8 +109,8 @@ def validate(values):
         raise AlertError("Use an http(s) API base URL without credentials, query, or fragment.")
     if url.scheme == "http" and values["TIDBYT_ALLOW_HTTP"] != "true":
         raise AlertError("HTTP exposes your API key. Use HTTPS or explicitly enable TIDBYT_ALLOW_HTTP.")
-    if values["TIDBYT_THEME"] not in ("neutral", "claude"):
-        raise AlertError("TIDBYT_THEME must be neutral or claude.")
+    if values["TIDBYT_THEME"] not in ("neutral", "claude", "agent"):
+        raise AlertError("TIDBYT_THEME must be neutral, claude, or agent.")
     if values["TIDBYT_ANIMATION"] not in ("thinking", "loading", "sparkle", "wave"):
         raise AlertError("Unknown Claude animation.")
     integer(values, "TIDBYT_ALERT_SECONDS", 1, 120)

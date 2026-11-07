@@ -4,11 +4,11 @@ Your agent needs you. Your Tidbyt lets you know.
 
 A local command-line tool that turns agent events into notifications on a
 Tidbyt or Tronbyt display. Guided setup saves your credentials privately and
-installs Claude Code hooks without replacing existing settings.
+installs Claude Code hooks without replacing existing settings. Codex and
+OpenCode integrations can be connected using the instructions below.
 
-**Claude Code is the first automatic integration, not the product boundary.**
-The same `notify` command can be called by OpenCode, Codex, cmux, scripts, or
-other tools. Dedicated adapters for those tools are future work.
+The same delivery engine supports Claude Code, Codex, OpenCode, scripts, and
+other tools.
 
 ## Requirements
 
@@ -129,8 +129,9 @@ Setup asks for:
    the per-device key from its web UI.
 3. **Device**: select from the API list, or enter an ID manually if listing
    is unavailable. Setup authenticates against that device before saving.
-4. **Theme**: neutral status labels, or the original Claude animations
-   (`thinking`, `loading`, `sparkle`, `wave`).
+4. **Theme**: neutral status labels, original Claude animations
+   (`thinking`, `loading`, `sparkle`, `wave`), or source-specific artwork
+   for Codex and OpenCode (other sources use neutral labels).
 5. **Brightness**: unchanged by default. Optionally boost temporarily, then
    restore the device's reported prior brightness.
 6. **Claude hooks**: attention, response finished, or both. Default: attention.
@@ -176,6 +177,59 @@ To change the events without repeating setup:
 tidbyt-agent-alerts install-hook --events both
 ```
 
+## Codex
+
+Codex supports async lifecycle hooks. Add the following groups to your existing
+`~/.codex/hooks.json` (or `$CODEX_HOME/hooks.json`), preserving any existing
+groups. Replace the launcher path if installed under a different prefix. If
+you use a non-default alert config, insert `--config /absolute/path/config.env`
+before `hook`. Both hooks are optional; remove either group to disable it.
+
+```json
+{
+  "hooks": {
+    "PermissionRequest": [{"hooks": [{"type": "command", "command": "~/.local/bin/tidbyt-agent-alerts hook codex", "async": true}]}],
+    "Stop": [{"hooks": [{"type": "command", "command": "~/.local/bin/tidbyt-agent-alerts hook codex", "async": true}]}]
+  }
+}
+```
+
+Open `/hooks` in Codex and trust the new hooks. `PermissionRequest` signals an
+approval request; `Stop` signals a finished response, not task success. Codex
+can cancel background hooks when a session ends. Managed policy may disable
+hooks. These local command hooks do not run in cloud orchestration.
+
+## OpenCode V2
+
+Add the installed plugin directory to the `plugins` array in your global
+`~/.config/opencode/opencode.json(c)` (or a project config). Preserve existing
+plugins. Replace `YOUR_HOME` with your actual home directory; for a custom
+install prefix, use its `share/tidbyt-agent-alerts` directory instead.
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugins": [{
+    "package": "/YOUR_HOME/.local/share/tidbyt-agent-alerts/tidbyt_agent_alerts/assets/opencode-plugin",
+    "options": {
+      "events": "attention",
+      "launcher": "/YOUR_HOME/.local/bin/tidbyt-agent-alerts"
+    }
+  }]
+}
+```
+
+Set `events` to `attention`, `complete`, or `both`; attention covers
+permission requests and forms. Completion means execution ended successfully,
+not that the requested task is necessarily correct. An optional `config`
+plugin option selects an absolute alert config path. OpenCode reloads plugins
+when configuration changes. This integration targets V2, not V1.
+
+Both integrations send only the project basename and a fixed event label;
+prompt, response, approval details, and transcripts are not forwarded.
+Select **Agent artwork** in setup to show the supplied Codex animation or
+OpenCode logo. For other sources this theme falls back to neutral.
+
 ## Any harness or terminal
 
 ```sh
@@ -184,9 +238,8 @@ tidbyt-agent-alerts notify --source opencode --event attention --project my-app
 tidbyt-agent-alerts notify --source cmux --event attention --message "Workspace needs input"
 ```
 
-These are ordinary CLI calls, **not automatic integrations**. Connect them
-to the relevant tool's supported lifecycle event or notification mechanism.
-Do not assume OpenCode, Codex, and cmux use Claude's hook format.
+These are ordinary CLI calls. Use the integrations above for automatic
+notifications or connect another tool to its lifecycle events.
 
 `--event` accepts `attention`, `complete`, or `error`. Without `--message`,
 the message uses the current directory's basename. Custom messages are sent
@@ -266,6 +319,7 @@ tidbyt-agent-alerts uninstall --purge
 Uninstall removes only managed Claude hook groups and this installer's
 program directory and launcher. It preserves unrelated settings, backups,
 and private state. Credentials are kept unless `--purge` is specified.
+Remove manually configured Codex hooks and the OpenCode plugin entry yourself.
 
 ## Development
 
@@ -279,9 +333,8 @@ python3 scripts/preview_setup.py # interactive UI demo, fake devices, disposable
 ```
 
 Architecture: `alerts.py` owns delivery, rendering, deduplication, and device
-locking; `claude.py` adapts Claude events into the generic notification
-fields. Future adapters should produce `source`, `event`, `project`, and
-`message`, and reuse the same engine. No agent SDK or model calls needed.
+locking; Claude, Codex, and OpenCode adapters produce generic notification
+fields and reuse the same engine. No model calls needed.
 
 GitHub Actions tests macOS/Linux with Python 3.10 and 3.13, checks rendering
 on macOS, and publishes versioned archives, the bootstrap, and checksums for `v*` tags.
