@@ -87,6 +87,7 @@ def setup(args):
     values["TIDBYT_THEME"] = ui.select("Display theme", [
         ("neutral", "Neutral", "Text alerts: INPUT, DONE, or ERROR."),
         ("claude", "Claude", "Animated Claude characters."),
+        ("agent", "Agent artwork", "Codex animation and OpenCode logo; neutral for other sources."),
     ], values["TIDBYT_THEME"])
     if values["TIDBYT_THEME"] == "claude":
         values["TIDBYT_ANIMATION"] = ui.select(
@@ -169,13 +170,36 @@ def hook(args):
     try:
         raw = sys.stdin.read(1024 * 1024 + 1)
         if len(raw) > 1024 * 1024:
+            if args.harness == "codex":
+                print("{}")
             return
-        event = claude.event(json.loads(raw))
+        payload = json.loads(raw)
+        if args.harness == "codex":
+            event = codex_event(payload)
+        else:
+            event = claude.event(payload)
         if event:
             event = {key: clean(value, 256 if key == "message" else 80) for key, value in event.items()}
             notify(load(args.config), state_dir(), **event)
     except (AlertError, OSError, ValueError, TypeError, KeyError):
         print("tidbyt-agent-alerts: notification failed; run doctor for diagnostics.", file=sys.stderr)
+    if args.harness == "codex":
+        print("{}")
+
+
+def codex_event(payload):
+    if not isinstance(payload, dict):
+        return None
+    name = payload.get("hook_event_name")
+    if name == "PermissionRequest":
+        kind, suffix = "attention", "needs your attention"
+    elif name == "Stop" and not payload.get("stop_hook_active"):
+        kind, suffix = "complete", "finished responding"
+    else:
+        return None
+    cwd = payload.get("cwd")
+    project = Path(cwd).name if isinstance(cwd, str) and cwd else "Codex"
+    return {"source": "codex", "event": kind, "project": project, "message": f"{project}: {suffix}"}
 
 
 def uninstall(args):
@@ -235,7 +259,7 @@ def parser():
     send.add_argument("--message", help="custom display text; sent to your configured device API")
     send.add_argument("--force", action="store_true", help="bypass cooldown, not the device lock")
     hooks = commands.add_parser("hook", help="read a harness event from stdin (internal adapter)")
-    hooks.add_argument("harness", choices=("claude",))
+    hooks.add_argument("harness", choices=("claude", "codex"))
     install = commands.add_parser("install-hook", help="install or update managed Claude hooks")
     install.add_argument("--events", choices=("attention", "complete", "both"), default="attention")
     remove = commands.add_parser("uninstall", help="remove owned hooks and installed CLI")
