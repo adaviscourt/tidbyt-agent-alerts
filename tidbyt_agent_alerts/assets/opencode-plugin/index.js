@@ -3,13 +3,16 @@ import { spawn } from "node:child_process"
 import { basename } from "node:path"
 import { homedir } from "node:os"
 
+// Defaults below are replaced when the plugin is installed by the setup wizard.
+const managed = null
+
 export default Plugin.define({
   id: "tidbyt-agent-alerts",
   setup(ctx) {
     const controller = new AbortController()
-    const launcher = typeof ctx.options.launcher === "string"
-      ? ctx.options.launcher : `${homedir()}/.local/bin/tidbyt-agent-alerts`
-    const selected = ctx.options.events || "attention"
+    const launcher = managed?.launcher || (typeof ctx.options.launcher === "string"
+      ? ctx.options.launcher : `${homedir()}/.local/bin/tidbyt-agent-alerts`)
+    const selected = managed?.events || ctx.options.events || "attention"
     const types = ["permission.asked", "form.created", "session.execution.succeeded"]
     void (async () => {
       for await (const event of ctx.event.subscribe({ types, signal: controller.signal })) {
@@ -18,7 +21,8 @@ export default Plugin.define({
         const complete = event.type === "session.execution.succeeded"
         if (complete ? selected !== "both" && selected !== "complete" : selected !== "both" && selected !== "attention") continue
         const args = []
-        if (typeof ctx.options.config === "string") args.push("--config", ctx.options.config)
+        const config = managed?.config || ctx.options.config
+        if (typeof config === "string") args.push("--config", config)
         args.push("notify", "--source", "opencode", "--event", complete ? "complete" : "attention",
           "--project", basename(event.location.directory) || "OpenCode")
         try {

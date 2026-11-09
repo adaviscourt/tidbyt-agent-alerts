@@ -45,7 +45,8 @@ def render(values, message, source, event):
         raise AlertError("Pixlet not found. Install Pixlet, then rerun setup.")
     theme = values["TIDBYT_THEME"]
     artwork = {"codex": "codex-loop.gif", "opencode": "opencode.png"}.get(source) if theme == "agent" else None
-    script = ASSETS / ("agent.star" if artwork else "claude.star" if theme == "claude" else "alert.star")
+    use_claude = theme == "claude" or (theme == "agent" and source == "claude")
+    script = ASSETS / ("agent.star" if artwork else "claude.star" if use_claude else "alert.star")
     with tempfile.TemporaryDirectory(prefix="tidbyt-agent-alerts-") as directory:
         # Newer Pixlet scans sibling .star files even in single-file mode.
         # Isolate the selected, self-contained theme from other app entry points.
