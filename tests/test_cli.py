@@ -18,7 +18,8 @@ class CLITests(unittest.TestCase):
         self.root = Path(self.directory.name)
         self.config = self.root / "config.env"
         self.claude_settings = self.root / "settings.json"
-        self.flags = ["--config", str(self.config), "--claude-settings", str(self.claude_settings)]
+        self.flags = ["--config", str(self.config), "--claude-settings", str(self.claude_settings),
+                      "--codex-hooks", str(self.root / "codex.json"), "--opencode-plugin", str(self.root / "plugin.js")]
 
     def invoke(self, *args):
         output, error = io.StringIO(), io.StringIO()
@@ -70,7 +71,7 @@ class CLITests(unittest.TestCase):
     def test_guided_setup_creates_private_config_and_hooks(self, isatty, secret, which, client, render):
         client.return_value.devices.return_value = [{"id": "desk", "displayName": "Desk"}]
         client.return_value.device.return_value = {"id": "desk"}
-        answers = ["", "1", "neutral", "n", "y", "both", "y", "n"]
+        answers = ["", "1", "neutral", "n", "y", "both", "n", "n", "y", "n"]
         with patch("builtins.input", side_effect=answers):
             code, output, error = self.invoke("setup")
         self.assertEqual(code, 0, error)
@@ -79,6 +80,7 @@ class CLITests(unittest.TestCase):
         self.assertEqual(set(json.loads(self.claude_settings.read_text())["hooks"]), {"Notification", "Stop"})
         self.assertNotIn("setup-key", output + error)
         self.assertIn("Review your setup", output)
+        self.assertNotIn("Classic Claude", output)
         self.assertIn("4/4", output)
         self.assertNotIn("\033", output)
         self.assertIn("Device ID: desk", output)
@@ -93,12 +95,39 @@ class CLITests(unittest.TestCase):
     def test_review_can_cancel_without_writing_any_files(self, isatty, secret, which, client, render):
         client.return_value.devices.return_value = [{"id": "desk", "displayName": "Desk"}]
         client.return_value.device.return_value = {"id": "desk"}
-        with patch("builtins.input", side_effect=["", "1", "neutral", "n", "y", "attention", "n"]):
+        with patch("builtins.input", side_effect=["", "1", "neutral", "n", "y", "attention", "n", "n", "n"]):
             code, output, error = self.invoke("--plain", "setup")
         self.assertEqual(code, 0, error)
         self.assertIn("No configuration changes were saved", output)
         self.assertFalse(self.config.exists())
         self.assertFalse(self.claude_settings.exists())
+
+    @patch("tidbyt_agent_alerts.cli.render")
+    @patch("tidbyt_agent_alerts.cli.Client")
+    @patch("tidbyt_agent_alerts.cli.shutil.which", return_value="/usr/bin/pixlet")
+    @patch("tidbyt_agent_alerts.terminal.getpass.getpass", return_value="setup-key")
+    @patch("sys.stdin.isatty", return_value=True)
+    def test_setup_connects_all_agents(self, isatty, secret, which, client, render):
+        client.return_value.devices.return_value = [{"id": "desk"}]
+        client.return_value.device.return_value = {"id": "desk"}
+        answers = ["", "1", "agent", "n", "y", "both", "y", "attention", "y", "complete", "y", "n"]
+        with patch("builtins.input", side_effect=answers):
+            code, output, error = self.invoke("setup")
+        self.assertEqual(code, 0, error)
+        self.assertEqual(load(self.config)["TIDBYT_THEME"], "agent")
+        self.assertIn("PermissionRequest", json.loads((self.root / "codex.json").read_text())["hooks"])
+        plugin = (self.root / "plugin.js").read_text()
+        self.assertIn('"events": "complete"', plugin)
+        self.assertIn("Codex", output)
+        self.assertIn("OpenCode", output)
+
+    def test_install_hook_supports_each_agent_with_shared_options(self):
+        write_env(self.config, settings())
+        for agent in ("claude", "codex", "opencode"):
+            code, _, error = self.invoke("install-hook", agent, "--events", "both")
+            self.assertEqual(code, 0, error)
+        self.assertEqual(set(json.loads((self.root / "codex.json").read_text())["hooks"]), {"PermissionRequest", "Stop"})
+        self.assertIn('"events": "both"', (self.root / "plugin.js").read_text())
 
     @patch("sys.stdin.isatty", return_value=False)
     def test_noninteractive_setup_does_not_save_credentials(self, isatty):

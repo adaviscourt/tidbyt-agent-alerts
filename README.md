@@ -4,11 +4,10 @@ Your agent needs you. Your Tidbyt lets you know.
 
 A local command-line tool that turns agent events into notifications on a
 Tidbyt or Tronbyt display. Guided setup saves your credentials privately and
-installs Claude Code hooks without replacing existing settings.
+connects Claude Code, Codex, and OpenCode without replacing existing settings.
 
-**Claude Code is the first automatic integration, not the product boundary.**
-The same `notify` command can be called by OpenCode, Codex, cmux, scripts, or
-other tools. Dedicated adapters for those tools are future work.
+The same delivery engine supports Claude Code, Codex, OpenCode, scripts, and
+other tools.
 
 ## Requirements
 
@@ -129,11 +128,12 @@ Setup asks for:
    the per-device key from its web UI.
 3. **Device**: select from the API list, or enter an ID manually if listing
    is unavailable. Setup authenticates against that device before saving.
-4. **Theme**: neutral status labels, or the original Claude animations
-   (`thinking`, `loading`, `sparkle`, `wave`).
+4. **Theme**: neutral status labels or source-specific artwork for Claude,
+   Codex, and OpenCode. Other sources use neutral labels.
 5. **Brightness**: unchanged by default. Optionally boost temporarily, then
    restore the device's reported prior brightness.
-6. **Claude hooks**: attention, response finished, or both. Default: attention.
+6. **Agent connections**: choose which agents to connect and select attention,
+   response finished, or both for each. Default: attention.
 7. **Test alert**: optional confirmation that the full path works.
 
 The wizard groups setup into four steps: connect your display, choose its
@@ -155,25 +155,33 @@ Configuration is written to `~/.config/tidbyt-agent-alerts/config.env` with
 owner-only permissions (`0600`). `XDG_CONFIG_HOME` is respected. Values are
 parsed as data, not executed as shell code. **Do not source the file.**
 
-Re-running setup keeps your key unless you enter a replacement. Reinstalling
-hooks updates this tool's entries rather than duplicating them. Settings are
-backed up alongside `~/.claude/settings.json` before changes. Restart Claude
-Code after changing hooks. Managed organizational policies may prevent them
+Re-running setup keeps your key unless you enter a replacement. Reconnecting
+an agent updates this tool's entries rather than duplicating them; agents you
+do not select are left unchanged. Claude and Codex settings are backed up
+before changes. Restart Claude Code after changing hooks; review and trust
+Codex hooks using `/hooks`. Managed organizational policies may prevent them
 from running.
 
-### Claude behavior
+### Agent behavior
 
-- **Attention**: `Notification` events for `permission_prompt` and `idle_prompt`.
-- **Complete**: `Stop`, meaning Claude finished a response—not proof a task
-  succeeded. Recursive stop-hook events are ignored.
-- Hooks run asynchronously; network/render failures do not block Claude.
+- **Claude Code**: attention covers permission and idle prompts; complete is
+  `Stop`. Recursive stop-hook events are ignored.
+- **Codex**: attention covers `PermissionRequest`; complete is `Stop`.
+  Codex may cancel background hooks when a session ends. Local command hooks
+  do not run in cloud orchestration.
+- **OpenCode V2**: attention covers permission requests and forms; complete is
+  successful execution. OpenCode V1 is not supported.
+- Completion does not prove the requested task succeeded. Alerts run in the
+  background; notification failures do not block the agent.
 - Only the project basename and a fixed event label are sent. Prompt text,
   response text, notification bodies, and transcript files are not forwarded.
 
 To change the events without repeating setup:
 
 ```sh
-tidbyt-agent-alerts install-hook --events both
+tidbyt-agent-alerts install-hook claude --events both
+tidbyt-agent-alerts install-hook codex --events attention
+tidbyt-agent-alerts install-hook opencode --events both
 ```
 
 ## Any harness or terminal
@@ -184,9 +192,8 @@ tidbyt-agent-alerts notify --source opencode --event attention --project my-app
 tidbyt-agent-alerts notify --source cmux --event attention --message "Workspace needs input"
 ```
 
-These are ordinary CLI calls, **not automatic integrations**. Connect them
-to the relevant tool's supported lifecycle event or notification mechanism.
-Do not assume OpenCode, Codex, and cmux use Claude's hook format.
+These are ordinary CLI calls. Use the integrations above for automatic
+notifications or connect another tool to its lifecycle events.
 
 `--event` accepts `attention`, `complete`, or `error`. Without `--message`,
 the message uses the current directory's basename. Custom messages are sent
@@ -208,7 +215,7 @@ tidbyt-agent-alerts --help
 ```
 
 `doctor` checks private config permissions, API authentication, Pixlet
-rendering, and managed Claude hooks **without pushing an image or changing
+rendering, and managed agent integrations **without pushing an image or changing
 brightness**. HTTP requests have timeouts; API response bodies and keys are
 not printed. Redirects are rejected rather than forwarding credentials.
 
@@ -241,12 +248,13 @@ tidbyt-agent-alerts --config "$HOME/private/alerts.env" setup
 tidbyt-agent-alerts --config "$HOME/private/alerts.env" test
 ```
 
-The selected config path is recorded in installed Claude hooks; credentials
-are not. `--claude-settings PATH` similarly selects an alternative settings
-file. State and device locks live under
+The selected config path is recorded in installed integrations; credentials
+are not. `--claude-settings`, `--codex-hooks`, and `--opencode-plugin` select
+alternative integration paths. State and device locks live under
 `${XDG_STATE_HOME:-~/.local/state}/tidbyt-agent-alerts` and contain hashes,
 timestamps, and optional brightness recovery values—not prompts or API keys.
-`CLAUDE_CONFIG_DIR` is respected when selecting the default Claude settings file.
+`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, and `XDG_CONFIG_HOME` select the default
+Claude, Codex, and OpenCode settings paths respectively.
 
 The former `~/.config/claude-alert.env` is **not** imported or executed. Enter
 its URL, key, and device ID in the new setup, then remove the old hook after
@@ -263,7 +271,7 @@ tidbyt-agent-alerts uninstall
 tidbyt-agent-alerts uninstall --purge
 ```
 
-Uninstall removes only managed Claude hook groups and this installer's
+Uninstall removes only managed agent integrations and this installer's
 program directory and launcher. It preserves unrelated settings, backups,
 and private state. Credentials are kept unless `--purge` is specified.
 
@@ -279,9 +287,8 @@ python3 scripts/preview_setup.py # interactive UI demo, fake devices, disposable
 ```
 
 Architecture: `alerts.py` owns delivery, rendering, deduplication, and device
-locking; `claude.py` adapts Claude events into the generic notification
-fields. Future adapters should produce `source`, `event`, `project`, and
-`message`, and reuse the same engine. No agent SDK or model calls needed.
+locking; Claude, Codex, and OpenCode adapters produce generic notification
+fields and reuse the same engine. No model calls needed.
 
 GitHub Actions tests macOS/Linux with Python 3.10 and 3.13, checks rendering
 on macOS, and publishes versioned archives, the bootstrap, and checksums for `v*` tags.

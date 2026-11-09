@@ -33,6 +33,7 @@ def main():
                                     {"id": values["TIDBYT_DEVICE_ID"], "displayName": "Custom display"}),
             )
             return cli.main(["--config", str(config), "--claude-settings", str(root / "settings.json"),
+                             "--codex-hooks", str(root / "hooks.json"), "--opencode-plugin", str(root / "plugin.js"),
                              *sys.argv[1:], "setup"])
 
 
