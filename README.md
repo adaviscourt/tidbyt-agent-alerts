@@ -129,8 +129,7 @@ Setup asks for:
 3. **Device**: select from the API list, or enter an ID manually if listing
    is unavailable. Setup authenticates against that device before saving.
 4. **Theme**: neutral status labels or source-specific artwork for Claude,
-   Codex, and OpenCode. Other sources use neutral labels. The classic Claude
-   theme remains available for existing configurations.
+   Codex, and OpenCode. Other sources use neutral labels.
 5. **Brightness**: unchanged by default. Optionally boost temporarily, then
    restore the device's reported prior brightness.
 6. **Agent connections**: choose which agents to connect and select attention,

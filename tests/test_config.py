@@ -33,6 +33,12 @@ class ConfigTests(unittest.TestCase):
         load(self.path)
         self.assertFalse(sentinel.exists())
 
+    def test_old_claude_theme_uses_agent_artwork(self):
+        write_env(self.path, settings(TIDBYT_THEME="claude", TIDBYT_ANIMATION="wave"))
+        values = load(self.path)
+        self.assertEqual(values["TIDBYT_THEME"], "agent")
+        self.assertEqual(values["TIDBYT_ANIMATION"], "wave")
+
     def test_rejects_broad_permissions(self):
         write_env(self.path, settings())
         self.path.chmod(0o644)

@@ -14,7 +14,7 @@ for event in ("attention", "complete", "error"):
     print(f"OK: neutral / {event}")
 
 for animation in ("thinking", "loading", "sparkle", "wave"):
-    values = DEFAULTS | {"TIDBYT_THEME": "claude", "TIDBYT_ANIMATION": animation}
+    values = DEFAULTS | {"TIDBYT_THEME": "agent", "TIDBYT_ANIMATION": animation}
     image = render(values, "Claude needs your attention", "claude", "attention")
     assert image[:4] == b"RIFF" and image[8:12] == b"WEBP"
     print(f"OK: claude / {animation}")

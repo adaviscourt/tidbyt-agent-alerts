@@ -80,6 +80,7 @@ class CLITests(unittest.TestCase):
         self.assertEqual(set(json.loads(self.claude_settings.read_text())["hooks"]), {"Notification", "Stop"})
         self.assertNotIn("setup-key", output + error)
         self.assertIn("Review your setup", output)
+        self.assertNotIn("Classic Claude", output)
         self.assertIn("4/4", output)
         self.assertNotIn("\033", output)
         self.assertIn("Device ID: desk", output)

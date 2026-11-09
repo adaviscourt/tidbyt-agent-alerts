@@ -87,13 +87,7 @@ def setup(args):
     values["TIDBYT_THEME"] = ui.select("Display theme", [
         ("neutral", "Neutral", "Text alerts: INPUT, DONE, or ERROR."),
         ("agent", "Agent artwork", "Artwork matches Claude, Codex, or OpenCode; neutral for other sources."),
-        ("claude", "Classic Claude", "Use Claude artwork for every source (legacy theme)."),
     ], values["TIDBYT_THEME"])
-    if values["TIDBYT_THEME"] == "claude":
-        values["TIDBYT_ANIMATION"] = ui.select(
-            "Claude animation", [(key, key.title(), "") for key in ("thinking", "loading", "sparkle", "wave")],
-            values["TIDBYT_ANIMATION"],
-        )
     if ui.confirm("Temporarily boost brightness?", bool(values["TIDBYT_ALERT_BRIGHTNESS"]),
                   hint="Off by default. If enabled, the prior brightness is restored afterward."):
         values["TIDBYT_ALERT_BRIGHTNESS"] = ui.integer("Alert brightness", values["TIDBYT_ALERT_BRIGHTNESS"] or "100", 0, 100)
@@ -131,7 +125,7 @@ def setup(args):
     ui.summary([
         ("Display", clean(device.get("displayName", values["TIDBYT_DEVICE_ID"]), 80)),
         ("API", values["TIDBYT_BASE_URL"]),
-        ("Theme", values["TIDBYT_THEME"].title() + (f" / {values['TIDBYT_ANIMATION']}" if values["TIDBYT_THEME"] == "claude" else "")),
+        ("Theme", values["TIDBYT_THEME"].title()),
         ("Brightness", "Unchanged" if not values["TIDBYT_ALERT_BRIGHTNESS"] else f"{values['TIDBYT_ALERT_BRIGHTNESS']}% for {values['TIDBYT_ALERT_SECONDS']}s, then restore"),
         *((name, event_labels[selected[name]] if name in selected else "Unchanged")
           for name in ("Claude Code", "Codex", "OpenCode")),
