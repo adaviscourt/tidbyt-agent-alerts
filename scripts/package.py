@@ -18,7 +18,7 @@ def package(destination):
     files = [ROOT / path for path in ("README.md", "LICENSE", "NOTICE", "CHANGELOG.md",
                                       "config.env.example", "install.sh", "install.py", "run.py", "bootstrap.sh")]
     files.extend(sorted(path for path in (ROOT / "tidbyt_agent_alerts").rglob("*")
-                        if path.is_file() and path.suffix in (".py", ".star")))
+                        if path.is_file() and path.suffix in (".py", ".star", ".png", ".gif", ".js")))
     with tarfile.open(output, "w:gz") as archive:
         for path in files:
             archive.add(path, arcname=str(Path(name) / path.relative_to(ROOT)), recursive=False)
