@@ -71,7 +71,7 @@ class CLITests(unittest.TestCase):
     def test_guided_setup_creates_private_config_and_hooks(self, isatty, secret, which, client, render):
         client.return_value.devices.return_value = [{"id": "desk", "displayName": "Desk"}]
         client.return_value.device.return_value = {"id": "desk"}
-        answers = ["", "1", "neutral", "n", "y", "both", "n", "n", "y", "n"]
+        answers = ["", "1", "neutral", "n", "y", "both", "n", "n", "n", "y", "n"]
         with patch("builtins.input", side_effect=answers):
             code, output, error = self.invoke("setup")
         self.assertEqual(code, 0, error)
@@ -95,7 +95,7 @@ class CLITests(unittest.TestCase):
     def test_review_can_cancel_without_writing_any_files(self, isatty, secret, which, client, render):
         client.return_value.devices.return_value = [{"id": "desk", "displayName": "Desk"}]
         client.return_value.device.return_value = {"id": "desk"}
-        with patch("builtins.input", side_effect=["", "1", "neutral", "n", "y", "attention", "n", "n", "n"]):
+        with patch("builtins.input", side_effect=["", "1", "neutral", "n", "y", "attention", "n", "n", "n", "n"]):
             code, output, error = self.invoke("--plain", "setup")
         self.assertEqual(code, 0, error)
         self.assertIn("No configuration changes were saved", output)
@@ -110,7 +110,7 @@ class CLITests(unittest.TestCase):
     def test_setup_connects_all_agents(self, isatty, secret, which, client, render):
         client.return_value.devices.return_value = [{"id": "desk"}]
         client.return_value.device.return_value = {"id": "desk"}
-        answers = ["", "1", "agent", "n", "y", "both", "y", "attention", "y", "complete", "y", "n"]
+        answers = ["", "1", "agent", "n", "y", "both", "y", "attention", "y", "complete", "n", "y", "n"]
         with patch("builtins.input", side_effect=answers):
             code, output, error = self.invoke("setup")
         self.assertEqual(code, 0, error)

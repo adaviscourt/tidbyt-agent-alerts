@@ -36,6 +36,18 @@ class IntegrationTests(unittest.TestCase):
         self.assertNotIn("SECRET", str(notify.call_args))
         self.assertEqual(err.getvalue(), "")
 
+    @patch("tidbyt_agent_alerts.cli.notify")
+    @patch("tidbyt_agent_alerts.cli.load", return_value={"TIDBYT_SESSION_TITLES": "true"})
+    @patch("tidbyt_agent_alerts.cli.session_title.title_for")
+    def test_hook_uses_title_or_directory(self, title_for, load, notify):
+        payload = {"hook_event_name": "PermissionRequest", "cwd": "/work/demo"}
+        for title, expected in (("  My\nTask  ", "MyTask"), (None, "demo")):
+            title_for.return_value = title
+            with patch("sys.stdin", io.StringIO(json.dumps(payload))), redirect_stdout(io.StringIO()):
+                self.assertEqual(cli.main(["hook", "codex"]), 0)
+            self.assertEqual(notify.call_args.kwargs["project"], expected)
+            self.assertEqual(notify.call_args.kwargs["message"], f"{expected}: needs your attention")
+
     def test_assets_exist(self):
         assets = Path(cli.__file__).parent / "assets"
         for name in ("codex-loop.gif", "opencode.png", "opencode-plugin/index.js"):

@@ -78,6 +78,7 @@ DEFAULTS = {
     "TIDBYT_ALERT_SECONDS": "15",
     "TIDBYT_COOLDOWN_SECONDS": "10",
     "TIDBYT_ALLOW_HTTP": "false",
+    "TIDBYT_SESSION_TITLES": "false",
 }
 
 
@@ -116,6 +117,8 @@ def validate(values):
         raise AlertError("TIDBYT_THEME must be neutral or agent.")
     if values["TIDBYT_ANIMATION"] not in ("thinking", "loading", "sparkle", "wave"):
         raise AlertError("Unknown Claude animation.")
+    if values["TIDBYT_SESSION_TITLES"] not in ("true", "false"):
+        raise AlertError("TIDBYT_SESSION_TITLES must be true or false.")
     integer(values, "TIDBYT_ALERT_SECONDS", 1, 120)
     integer(values, "TIDBYT_COOLDOWN_SECONDS", 0, 300)
     if values["TIDBYT_ALERT_BRIGHTNESS"]:

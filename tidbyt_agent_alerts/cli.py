@@ -7,7 +7,7 @@ import shlex
 import shutil
 import sys
 
-from . import __version__, claude, integrations
+from . import __version__, claude, integrations, session_title
 from .alerts import notify, render
 from .api import Client
 from .config import (
@@ -107,6 +107,10 @@ def setup(args):
                 ("complete", "Response finished", "When the agent finishes responding."),
                 ("both", "Both", "Input requests and finished responses."),
             ], "attention")
+    values["TIDBYT_SESSION_TITLES"] = str(ui.confirm(
+        "Use session titles when available?", values["TIDBYT_SESSION_TITLES"] == "true",
+        hint="Codex and Claude custom titles; otherwise the working directory is shown.",
+    )).lower()
     if any(event in ("complete", "both") for event in selected.values()):
         ui.note("A finished response does not mean the task is complete or successful.")
     # Preflight every selected target before saving credentials.
@@ -126,6 +130,7 @@ def setup(args):
         ("Display", clean(device.get("displayName", values["TIDBYT_DEVICE_ID"]), 80)),
         ("API", values["TIDBYT_BASE_URL"]),
         ("Theme", values["TIDBYT_THEME"].title()),
+        ("Session titles", "When available" if values["TIDBYT_SESSION_TITLES"] == "true" else "Off"),
         ("Brightness", "Unchanged" if not values["TIDBYT_ALERT_BRIGHTNESS"] else f"{values['TIDBYT_ALERT_BRIGHTNESS']}% for {values['TIDBYT_ALERT_SECONDS']}s, then restore"),
         *((name, event_labels[selected[name]] if name in selected else "Unchanged")
           for name in ("Claude Code", "Codex", "OpenCode")),
@@ -188,8 +193,14 @@ def hook(args):
         else:
             event = claude.event(payload)
         if event:
+            values = load(args.config)
+            if values.get("TIDBYT_SESSION_TITLES") == "true":
+                title = clean(session_title.title_for(args.harness, payload) or "", 80)
+                if title:
+                    suffix = "needs your attention" if event["event"] == "attention" else "finished responding"
+                    event.update(project=title, message=f"{title}: {suffix}")
             event = {key: clean(value, 256 if key == "message" else 80) for key, value in event.items()}
-            notify(load(args.config), state_dir(), **event)
+            notify(values, state_dir(), **event)
     except (AlertError, OSError, ValueError, TypeError, KeyError):
         print("tidbyt-agent-alerts: notification failed; run doctor for diagnostics.", file=sys.stderr)
     if args.harness == "codex":

@@ -228,6 +228,13 @@ not printed. Redirects are rejected rather than forwarding credentials.
 | Duplicate alerts | Remove any old `claude-alert.sh` hook manually; this tool never deletes unrelated hooks |
 | Brightness left boosted after a crash | Retry an alert after restoring connectivity; saved recovery state restores it first |
 
+Setup can optionally use session titles as the alert prefix. Codex titles are read
+from its local session index; Claude Code custom titles are read from the session
+transcript. If a title is unavailable, or for OpenCode, the working directory
+name is used. Enable or disable this later by rerunning setup or setting
+`TIDBYT_SESSION_TITLES` to `true` or `false` in the config file. Session title
+storage is controlled by the agent and may change.
+
 Alerts use local rendering and the standard `/push` image endpoint. No
 published community app, server-side `/push_app`, or server extension is
 required. Images are pushed without an installation ID, so they do not stay
