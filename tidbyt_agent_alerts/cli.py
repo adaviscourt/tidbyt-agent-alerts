@@ -4,6 +4,7 @@ import argparse
 import json
 from pathlib import Path
 import shlex
+import subprocess
 import shutil
 import sys
 
@@ -222,6 +223,26 @@ def codex_event(payload):
     return {"source": "codex", "event": kind, "project": project, "message": f"{project}: {suffix}"}
 
 
+def update():
+    root = Path(__file__).resolve().parent.parent
+    marker = root / "installation.json"
+    if root.name != "tidbyt-agent-alerts" or root.parent.name != "share" or not marker.is_file():
+        raise AlertError("Update requires an installed copy. For a source checkout, update it and rerun install.sh.")
+    try:
+        metadata = json.loads(marker.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        raise AlertError("Unrecognized installation marker; no changes made.") from None
+    if not isinstance(metadata, dict) or metadata.get("project") != "tidbyt-agent-alerts":
+        raise AlertError("Unrecognized installation marker; no changes made.")
+    bootstrap = root / "bootstrap.sh"
+    if not bootstrap.is_file():
+        raise AlertError("Update helper is missing. Reinstall from the latest release.")
+    command = ["bash", str(bootstrap), "--no-setup", "--prefix", str(root.parent.parent),
+               "--update-current", __version__]
+    if subprocess.call(command) != 0:
+        raise AlertError("Update failed; check the output above and try again.")
+
+
 def uninstall(args):
     root = Path(__file__).resolve().parent.parent
     marker = root / "installation.json"
@@ -280,6 +301,7 @@ def parser():
     commands.add_parser("setup", help="configure display and agent integrations")
     commands.add_parser("doctor", help="verify credentials, rendering, and hooks without alerting")
     commands.add_parser("test", help="send a test notification")
+    commands.add_parser("update", help="install the latest published release")
     send = commands.add_parser("notify", help="send a harness-independent notification")
     send.add_argument("--source", default="agent", help="integration name, e.g. codex or cmux")
     send.add_argument("--event", choices=("attention", "complete", "error"), default="attention")
@@ -323,6 +345,8 @@ def main(argv=None):
                 print("OpenCode connected.")
         elif args.command == "uninstall":
             uninstall(args)
+        elif args.command == "update":
+            update()
         else:
             values = load(args.config)
             if args.command == "test":

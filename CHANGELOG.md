@@ -1,6 +1,11 @@
 # Changelog
 
-## 0.2.0 — Unreleased
+## 0.3.0
+
+- Add an update command for installing the latest verified release.
+- Optionally show available session titles in alerts.
+
+## 0.2.0
 
 - Add Codex and OpenCode alerts and unify agent setup and management.
 

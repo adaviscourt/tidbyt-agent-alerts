@@ -28,7 +28,7 @@ def install(prefix, source):
         staged.mkdir()
         shutil.copytree(source / "tidbyt_agent_alerts", staged / "tidbyt_agent_alerts",
                         ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
-        for name in ("run.py", "LICENSE", "NOTICE", "README.md"):
+        for name in ("run.py", "LICENSE", "NOTICE", "README.md", "bootstrap.sh"):
             shutil.copy2(source / name, staged / name)
         (staged / "installation.json").write_text(json.dumps({"project": "tidbyt-agent-alerts", "schema": 1}) + "\n")
         backup = Path(directory) / "previous"

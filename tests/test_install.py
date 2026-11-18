@@ -10,7 +10,8 @@ import unittest
 
 from install import install
 from scripts.package import package
-from tidbyt_agent_alerts import __version__
+from tidbyt_agent_alerts import __version__, cli
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -23,6 +24,15 @@ class InstallTests(unittest.TestCase):
         self.home = Path(self.directory.name)
         self.prefix = self.home / "prefix with space and 'quote"
         self.env = os.environ | {"HOME": str(self.home), "XDG_CONFIG_HOME": str(self.home / "config"), "XDG_STATE_HOME": str(self.home / "state")}
+
+    def test_update_uses_installed_bootstrap_and_prefix(self):
+        install(self.prefix, ROOT)
+        installed_cli = self.prefix / "share/tidbyt-agent-alerts/tidbyt_agent_alerts/cli.py"
+        with patch.object(cli, "__file__", str(installed_cli)), patch("tidbyt_agent_alerts.cli.subprocess.call", return_value=0) as call:
+            cli.update()
+        self.assertEqual(call.call_args.args[0], ["bash", str((installed_cli.parent.parent / "bootstrap.sh").resolve()),
+                                                  "--no-setup", "--prefix", str(self.prefix.resolve()),
+                                                  "--update-current", __version__])
 
     def test_installed_launcher_runs_from_arbitrary_directory(self):
         launcher = install(self.prefix, ROOT)

@@ -110,6 +110,29 @@ shutil.copyfile(root / filename, output)
     def assert_cleaned(self):
         self.assertEqual(list(self.root.glob("tidbyt-agent-alerts-*")), [])
 
+    def test_update_installs_only_newer_release(self):
+        result = self.run_bootstrap("--no-setup", "--update-current", "0.0.9")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Updating from 0.0.9 to 0.1.0", result.stdout)
+        self.assertTrue((self.prefix / "result.json").exists())
+        self.assertEqual(len(self.requests()), 2)
+
+    def test_update_skips_equal_or_older_release(self):
+        for current in ("0.1.0", "0.2.0"):
+            with self.subTest(current=current):
+                (self.root / "requests.jsonl").unlink(missing_ok=True)
+                result = self.run_bootstrap("--no-setup", "--update-current", current)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("up to date", result.stdout)
+                self.assertFalse((self.prefix / "result.json").exists())
+                self.assertEqual(len(self.requests()), 1)
+
+    def test_update_rejects_unordered_versions(self):
+        result = self.run_bootstrap("--no-setup", "--update-current", "0.1.0-beta")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("stable version numbers", result.stderr)
+        self.assertFalse(self.prefix.exists())
+
     def test_piped_headless_install_resolves_latest_then_pins_archive(self):
         result = self.run_bootstrap("--no-setup")
         self.assertEqual(result.returncode, 0, result.stderr)

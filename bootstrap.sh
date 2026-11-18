@@ -3,18 +3,20 @@
 main() (
     set -euo pipefail
 
-    local version="" no_setup=false prefix="" plain=false
+    local version="" no_setup=false prefix="" plain=false update_current=""
     while [ "$#" -gt 0 ]; do
         case "$1" in
-            --version|--prefix)
+            --version|--prefix|--update-current)
                 if [ "$#" -lt 2 ] || [ -z "$2" ]; then
                     echo "$1 requires a value." >&2
                     exit 1
                 fi
                 if [ "$1" = --version ]; then
                     version="${2#v}"
-                else
+                elif [ "$1" = --prefix ]; then
                     prefix="$2"
+                else
+                    update_current="$2"
                 fi
                 shift 2
                 ;;
@@ -115,6 +117,26 @@ if requested and version != requested:
 print(version)
 PY
 )"
+    if [ -n "$update_current" ]; then
+        local comparison
+        comparison="$("$python" - "$update_current" "$version" <<'PYCODE'
+import re
+import sys
+
+current, latest = sys.argv[1:]
+if not all(re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", v) for v in (current, latest)):
+    raise SystemExit("Automatic updates require stable version numbers; use the release installer instead.")
+def parts(version):
+    return tuple(map(int, version.split(".")))
+print("update" if parts(latest) > parts(current) else "current")
+PYCODE
+)"
+        if [ "$comparison" = current ]; then
+            echo "Installed version $update_current is up to date (latest release: $version)."
+            exit 0
+        fi
+        echo "Updating from $update_current to $version."
+    fi
     stage '2/3' "Downloading Tidbyt Agent Alerts $version..."
     if ! curl --fail --silent --show-error --location \
         --proto '=https' --proto-redir '=https' --connect-timeout 10 --max-time 120 --retry 2 \

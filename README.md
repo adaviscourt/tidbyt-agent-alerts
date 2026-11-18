@@ -269,8 +269,12 @@ testing. The original community app and script are left untouched.
 
 ## Update and uninstall
 
-Install a newer release with the same prefix. Credentials, hooks, and their
-stable launcher path are preserved. Rerun setup if a prerequisite moves.
+Run `tidbyt-agent-alerts update` to install the latest published release. The
+command preserves the install prefix, credentials, hooks, and stable launcher
+path. It reports when the installed version is already current. This command
+is available starting in version 0.3.0; for older installations, rerun the
+bootstrap command shown above using the same prefix. Rerun setup to enable
+session titles or if a prerequisite moves.
 
 ```sh
 tidbyt-agent-alerts uninstall
