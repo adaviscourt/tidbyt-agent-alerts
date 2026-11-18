@@ -1,6 +1,10 @@
 # Changelog
 
-## 0.1.0 — Unreleased
+## 0.2.0 — Unreleased
+
+- Add Codex and OpenCode alerts and unify agent setup and management.
+
+## 0.1.0
 
 - Separate menu labels from descriptions, identify device IDs explicitly, and
   clarify theme and notification choices.
